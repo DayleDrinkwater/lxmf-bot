@@ -1,9 +1,12 @@
 import os, time
 import RNS
+import LXMF
 from   LXMF    import LXMRouter, LXMessage
 from   appdirs import AppDirs
 from   queue   import Queue
 from   types   import SimpleNamespace
+import base64  # Add base64 import
+from   .lxmf_message_fields import LxmfImageField  # Import LxmfImageField if needed
 
 # Core class influenced by https://github.com/chengtripp/lxmf_messageboard
 # Bot syntax inspired by Discord.py and Telethon
@@ -17,7 +20,7 @@ class LXMFBot:
 
     def __init__(self, name='LXMFBot', announce=360, announce_immediately=False):
 
-        # initialize identiy
+        # initialize identity
         self.name = name
         self.announce_time = announce
         dirs = AppDirs("LXMFBot", "randogoth")
@@ -72,8 +75,8 @@ class LXMFBot:
         sender = RNS.hexrep(message.source_hash, delimit=False)
         receipt = RNS.hexrep(message.hash, delimit=False)
         RNS.log(f'Message receipt <{receipt}>', RNS.LOG_INFO)
-        def reply(msg):
-            self.send(sender, msg)
+        def reply(msg, image=None):
+            self.send(sender, msg, image=image)
         if receipt not in self.receipts:
             self.receipts.append(receipt)
             if len(self.receipts) > 100:
@@ -89,7 +92,7 @@ class LXMFBot:
                 msg = SimpleNamespace(**obj)
                 callback(msg)
 
-    def send(self, destination, message, title='Reply'):
+    def send(self, destination, message, title='Reply', image=None):
         try:
             hash = bytes.fromhex(destination)
         except Exception as e:
@@ -108,14 +111,24 @@ class LXMFBot:
         else:
             lxmf_destination = RNS.Destination(id, RNS.Destination.OUT, RNS.Destination.SINGLE, "lxmf", "delivery")
             lxm = LXMessage(lxmf_destination, self.local, message, title=title, desired_method=LXMessage.DIRECT)
+            
+            # Handle image attachment
+            if image:
+                # Decode the base64 image data
+                image_bytes = base64.b64decode(image)
+                # Create an LxmfImageField instance
+                image_field = LxmfImageField(image_type='jpg', image_bytes=image_bytes)
+                # Add the image field to the message's fields
+                lxm.fields[LXMF.FIELD_IMAGE] = [image_field.image_type, image_field.image_bytes]
+            
             lxm.try_propagation_on_fail = True
             self.queue.put(lxm)
-    
+
     def run(self, delay=10):
         RNS.log(f'LXMF Bot `{self.name}` reporting for duty and awaiting messages...', RNS.LOG_INFO)
         while True:
             for i in list(self.queue.queue):
                 lxm = self.queue.get()
                 self.router.handle_outbound(lxm)
-            self._announce
+            self._announce()
             time.sleep(delay)
