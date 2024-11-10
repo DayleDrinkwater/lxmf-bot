@@ -110,7 +110,9 @@ class LXMFBot:
             RNS.log("OK, a path was requested. If the network knows a path, you will receive an announce with the Identity data shortly.", RNS.LOG_INFO)
         else:
             lxmf_destination = RNS.Destination(id, RNS.Destination.OUT, RNS.Destination.SINGLE, "lxmf", "delivery")
-            lxm = LXMessage(lxmf_destination, self.local, message, title=title, desired_method=LXMessage.DIRECT)
+            # Determine the desired method based on the presence of an image
+            desired_method = LXMessage.DIRECT if image else LXMessage.OPPORTUNISTIC
+            lxm = LXMessage(lxmf_destination, self.local, message, title=title, desired_method=desired_method)
             
             # Handle image attachment
             if image:
